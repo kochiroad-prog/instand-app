@@ -332,7 +332,7 @@ export async function generateQuotationPDF({
   const sigX = M + colW + 8;
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...C.BLACK);
-  doc.text('Jakarta, ' + tgl, sigX, y + 8);
+  doc.text('Malang, ' + tgl, sigX, y + 8);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...C.GRAY);
   doc.text('Hormat kami,', sigX, y + 13);
