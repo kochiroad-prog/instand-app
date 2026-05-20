@@ -76,6 +76,31 @@ export async function addProduct(product) {
   return data;
 }
 
+export async function updateProduct(id, { name, unit_price, keterangan, unit }) {
+  // Cek harga lama untuk price history
+  const { data: existing } = await supabase
+    .from('products').select('unit_price').eq('id', id).single();
+
+  const { data, error } = await supabase
+    .from('products')
+    .update({ name, unit_price, keterangan, unit })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+
+  // Catat ke price history jika harga berubah
+  if (existing && existing.unit_price !== unit_price) {
+    await supabase.from('price_history').insert({
+      product_id: id,
+      old_price:  existing.unit_price,
+      new_price:  unit_price,
+    }).then(() => {}).catch(() => {});
+  }
+
+  return data;
+}
+
 export async function deleteProduct(id) {
   const { error } = await supabase
     .from('products')

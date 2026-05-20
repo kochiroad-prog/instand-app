@@ -1,7 +1,7 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { getProductsByCategory } from '@/lib/supabase';
+import { getProductsByCategory, addProduct } from '@/lib/supabase';
 
 const fmt = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID');
 
@@ -43,23 +43,57 @@ export default function CalculatorPage() {
 
   const [selectedBase, setSelectedBase]       = useState(null);
   const [cartItems, setCartItems]             = useState([]);
-  const [marginPct, setMarginPct]             = useState(35);   // booth base
-  const [addonMarginPct, setAddonMarginPct]   = useState(35);   // add-on
-  const [ongkirMarginPct, setOngkirMarginPct] = useState(15);   // ongkir
+  const [marginPct, setMarginPct]             = useState(35);
+  const [addonMarginPct, setAddonMarginPct]   = useState(35);
+  const [ongkirMarginPct, setOngkirMarginPct] = useState(15);
   const [customJual, setCustomJual]           = useState('');
   const [activeTab, setActiveTab]             = useState('addon');
   const [toast, setToast]                     = useState('');
 
-  useEffect(() => {
-    Promise.all([
-      getProductsByCategory('booth_base'),
-      getProductsByCategory('addon'),
-      getProductsByCategory('ongkir'),
-    ]).then(([b, a, o]) => {
+  // Quick-add produk baru langsung dari kalkulator
+  const [showQuickAdd, setShowQuickAdd]       = useState(false);
+  const [quickItem, setQuickItem]             = useState({ name:'', category:'addon', unit_price:'', unit:'pcs', keterangan:'' });
+  const [quickSaving, setQuickSaving]         = useState(false);
+
+  const DRAFT_KEY = 'calc_draft';
+
+  // ── Load produk ──────────────────────────────────────────
+  const loadProducts = useCallback(async () => {
+    try {
+      const [b, a, o] = await Promise.all([
+        getProductsByCategory('booth_base'),
+        getProductsByCategory('addon'),
+        getProductsByCategory('ongkir'),
+      ]);
       setBoothBases(b); setAddons(a); setOngkirs(o);
-    }).catch(e => showToast('❌ Gagal load: ' + e.message))
-      .finally(() => setLoading(false));
+    } catch(e) { showToast('❌ Gagal load: ' + e.message); }
+    finally { setLoading(false); }
   }, []);
+
+  // ── Restore draft dari sessionStorage saat mount ─────────
+  useEffect(() => {
+    loadProducts().then(() => {
+      try {
+        const raw = sessionStorage.getItem(DRAFT_KEY);
+        if (!raw) return;
+        const draft = JSON.parse(raw);
+        if (draft.selectedBase) setSelectedBase(draft.selectedBase);
+        if (draft.cartItems)    setCartItems(draft.cartItems);
+        if (draft.marginPct !== undefined)       setMarginPct(draft.marginPct);
+        if (draft.addonMarginPct !== undefined)  setAddonMarginPct(draft.addonMarginPct);
+        if (draft.ongkirMarginPct !== undefined) setOngkirMarginPct(draft.ongkirMarginPct);
+        if (draft.customJual)   setCustomJual(draft.customJual);
+      } catch {}
+    });
+  }, []);
+
+  // ── Simpan draft ke sessionStorage setiap ada perubahan ──
+  useEffect(() => {
+    if (loading) return;
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
+      selectedBase, cartItems, marginPct, addonMarginPct, ongkirMarginPct, customJual,
+    }));
+  }, [selectedBase, cartItems, marginPct, addonMarginPct, ongkirMarginPct, customJual, loading]);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2500); };
 
@@ -110,10 +144,31 @@ export default function CalculatorPage() {
 
   const removeItem = (id) => setCartItems(prev => prev.filter(i => i.id !== id));
 
+  // ── Quick-add produk baru ────────────────────────────────
+  const handleQuickAdd = async () => {
+    if (!quickItem.name.trim()) return showToast('⚠️ Isi nama item');
+    const price = parseFloat(quickItem.unit_price);
+    if (isNaN(price) || price < 0) return showToast('⚠️ Harga tidak valid');
+    setQuickSaving(true);
+    try {
+      const added = await addProduct({ ...quickItem, unit_price: price });
+      // Tambah ke daftar yang relevan tanpa reload
+      if (added.category === 'addon')  setAddons(prev => [...prev, added].sort((a,b) => a.unit_price - b.unit_price));
+      if (added.category === 'ongkir') setOngkirs(prev => [...prev, added].sort((a,b) => a.unit_price - b.unit_price));
+      if (added.category === 'booth_base') setBoothBases(prev => [...prev, added]);
+      setShowQuickAdd(false);
+      setQuickItem({ name:'', category:'addon', unit_price:'', unit:'pcs', keterangan:'' });
+      setActiveTab(added.category === 'ongkir' ? 'ongkir' : 'addon');
+      showToast(`✅ "${added.name}" ditambahkan ke daftar`);
+    } catch(e) { showToast('❌ ' + e.message); }
+    finally { setQuickSaving(false); }
+  };
+
   const reset = () => {
     setSelectedBase(null); setCartItems([]);
     setMarginPct(35); setAddonMarginPct(35); setOngkirMarginPct(15);
     setCustomJual('');
+    sessionStorage.removeItem(DRAFT_KEY);
   };
 
   const goToQuotation = () => {
@@ -184,7 +239,59 @@ export default function CalculatorPage() {
         </div>
 
         {/* ── Step 2: Add-ons ────────────────────────────── */}
-        <div className="section-label">2. Tambah Komponen</div>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+          <div className="section-label" style={{ marginBottom:0 }}>2. Tambah Komponen</div>
+          <button
+            className="btn btn-sm"
+            style={{ fontSize:'0.72rem', color:'var(--accent)', background:'var(--accent-light)', border:'none' }}
+            onClick={() => setShowQuickAdd(!showQuickAdd)}
+          >{showQuickAdd ? '✕ Batal' : '+ Produk Baru'}</button>
+        </div>
+
+        {/* Quick-add produk baru dari kalkulator — state kalkulator tidak hilang */}
+        {showQuickAdd && (
+          <div className="card" style={{ marginBottom:10, borderColor:'var(--accent)', borderWidth:2 }}>
+            <div style={{ fontSize:'0.82rem', fontWeight:700, color:'var(--accent)', marginBottom:10 }}>
+              ➕ Tambah Produk Baru ke Daftar
+            </div>
+            <div className="form-group">
+              <label className="form-label">Nama</label>
+              <input className="form-input" placeholder="Nama produk/add-on" autoFocus
+                value={quickItem.name} onChange={e => setQuickItem(p => ({...p, name:e.target.value}))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Kategori</label>
+              <select className="form-select" value={quickItem.category}
+                onChange={e => setQuickItem(p => ({...p, category:e.target.value}))}>
+                <option value="addon">🔩 Add-on</option>
+                <option value="ongkir">🚚 Ongkir</option>
+                <option value="booth_base">🏪 Booth Base</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Keterangan (opsional)</label>
+              <input className="form-input" placeholder="Spesifikasi, ukuran, dll"
+                value={quickItem.keterangan} onChange={e => setQuickItem(p => ({...p, keterangan:e.target.value}))} />
+            </div>
+            <div style={{ display:'flex', gap:10 }}>
+              <div className="form-group" style={{ flex:2, marginBottom:0 }}>
+                <label className="form-label">Harga HPP (Rp)</label>
+                <input className="form-input" type="number" placeholder="0"
+                  value={quickItem.unit_price} onChange={e => setQuickItem(p => ({...p, unit_price:e.target.value}))} />
+              </div>
+              <div className="form-group" style={{ flex:1, marginBottom:0 }}>
+                <label className="form-label">Satuan</label>
+                <input className="form-input" placeholder="pcs"
+                  value={quickItem.unit} onChange={e => setQuickItem(p => ({...p, unit:e.target.value}))} />
+              </div>
+            </div>
+            <button className="btn btn-primary btn-full" style={{ marginTop:12 }}
+              onClick={handleQuickAdd} disabled={quickSaving}>
+              {quickSaving ? '⏳ Menyimpan...' : '💾 Simpan & Langsung Pakai'}
+            </button>
+          </div>
+        )}
+
         <div className="tab-bar" style={{ marginBottom:8 }}>
           {[['addon','🔩 Add-on'],['ongkir','🚚 Ongkir']].map(([k,l]) => (
             <button key={k} className={`tab-btn${activeTab===k?' active':''}`} onClick={() => setActiveTab(k)}>{l}</button>
@@ -199,6 +306,7 @@ export default function CalculatorPage() {
             }}>
               <div>
                 <div style={{ fontSize:'0.87rem', fontWeight:500 }}>{p.name}</div>
+                {p.keterangan && <div style={{ fontSize:'0.72rem', color:'var(--text-secondary)' }}>{p.keterangan}</div>}
                 <div style={{ fontSize:'0.75rem', color:'var(--text-muted)' }}>HPP: {fmt(p.unit_price)} / {p.unit}</div>
               </div>
               <button className="btn btn-ghost btn-sm" onClick={() => addToCart(p)}>+ Tambah</button>
