@@ -1,0 +1,87 @@
+============================================
+  INSTAND APP - Panduan Instalasi & Pakai
+============================================
+
+PRASYARAT:
+  - Node.js (download di https://nodejs.org, pilih LTS)
+  - Akun Supabase (sudah dibuat)
+
+============================================
+LANGKAH 1: Setup Database Supabase
+============================================
+
+1. Buka: https://supabase.com/dashboard/project/wslumguauxmtkqmyzyfu
+2. Klik menu "SQL Editor" di sidebar kiri
+3. Klik "+ New query"
+4. Buka file: supabase\schema.sql
+5. Copy semua isinya, paste ke SQL Editor
+6. Klik "RUN" (atau Ctrl+Enter)
+7. Pastikan muncul hasil tabel dengan data produk
+
+CATATAN: Langkah ini hanya dilakukan SEKALI.
+
+============================================
+LANGKAH 2: Install & Jalankan App
+============================================
+
+CARA MUDAH (double-click):
+  → Klik 2x file SETUP.bat
+  → Ikuti instruksi di layar
+
+CARA MANUAL (lewat terminal):
+  1. Buka terminal / Command Prompt
+  2. cd "D:\INSTAND APK\instand-app"
+  3. npm install
+  4. npm run dev
+  5. Buka browser: http://localhost:3000
+
+============================================
+LANGKAH 3: Install sebagai PWA di HP Android
+============================================
+
+1. Jalankan app di laptop (npm run dev)
+2. Pastikan HP & laptop terhubung WiFi yang sama
+3. Cari IP laptop (ipconfig di cmd, lihat IPv4)
+4. Buka Chrome di HP Android
+5. Ketik: http://[IP-LAPTOP]:3000
+   Contoh: http://192.168.1.5:3000
+6. Klik ikon "..." di Chrome → "Add to Home screen"
+7. App akan terinstall seperti APK native!
+
+Atau build untuk production:
+  npm run build
+  npm start
+  Lalu deploy ke Vercel (gratis): vercel.com
+
+============================================
+FITUR APLIKASI:
+============================================
+
+🧮 KALKULATOR  (/calculator)
+   - Pilih booth base (100/120/150cm)
+   - Tambah komponen (tiang, wingside, LED, dll)
+   - Input harga jual → otomatis hitung laba
+   - Langsung buat penawaran dari sini
+
+📦 PRICELIST  (/pricelist)
+   - Lihat 3 paket standar + harga
+   - Daftar semua add-on & bahan baku
+
+📄 PENAWARAN  (/quotations)
+   - Riwayat semua penawaran tersimpan
+   - Export PDF profesional berbranding INSTAND
+   - Update status: Draft → Terkirim → Diterima
+
+📊 DASHBOARD  (/dashboard)
+   - Grafik revenue vs laba (Recharts)
+   - Total penawaran, margin rata-rata
+   - Tren per bulan
+
+⚙️ KELOLA HARGA  (/settings)
+   - Update harga komponen langsung dari app
+   - Tambah/hapus produk tanpa edit Excel
+
+============================================
+BANTUAN:
+  Email: kochiroad@gmail.com
+============================================
