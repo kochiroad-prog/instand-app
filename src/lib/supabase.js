@@ -155,6 +155,36 @@ export async function createQuotation({ client_name, project_name, total_hpp, se
   return quotation;
 }
 
+export async function updateQuotation(id, { client_name, project_name, notes, selling_price, items }) {
+  // Update header
+  const { data, error } = await supabase
+    .from('quotations')
+    .update({ client_name, project_name, notes, selling_price, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+
+  // Replace semua items
+  if (items) {
+    await supabase.from('quotation_items').delete().eq('quotation_id', id);
+    if (items.length > 0) {
+      const rows = items.map((item, idx) => ({
+        quotation_id: id,
+        item_name:   item.item_name,
+        unit_price:  item.unit_price,
+        qty:         item.qty,
+        subtotal:    item.unit_price * item.qty,
+        sort_order:  idx,
+      }));
+      const { error: ie } = await supabase.from('quotation_items').insert(rows);
+      if (ie) throw ie;
+    }
+  }
+
+  return data;
+}
+
 export async function updateQuotationSellingPrice(id, selling_price) {
   const { data, error } = await supabase
     .from('quotations')

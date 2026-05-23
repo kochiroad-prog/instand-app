@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { getQuotations, updateQuotationStatus, updateQuotationDiscount, deleteQuotation } from '@/lib/supabase';
+import { getQuotations, updateQuotationStatus, updateQuotationDiscount, updateQuotation, deleteQuotation } from '@/lib/supabase';
 import { generateQuotationPDF } from '@/lib/pdf';
 
 const formatRp = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID');
@@ -35,9 +35,11 @@ export default function QuotationsPage() {
   const [filter, setFilter]             = useState('all');
   const [selected, setSelected]         = useState(null);
   const [showGuide, setShowGuide]       = useState(false);
-  const [discountId, setDiscountId]     = useState(null);   // id yg sedang diberi diskon
-  const [discType, setDiscType]         = useState('pct');  // 'pct' | 'rp'
-  const [discValue, setDiscValue]       = useState('');     // input user
+  const [discountId, setDiscountId]     = useState(null);
+  const [discType, setDiscType]         = useState('pct');
+  const [discValue, setDiscValue]       = useState('');
+  const [editingId, setEditingId]       = useState(null);   // id penawaran yg sedang diedit
+  const [editDraft, setEditDraft]       = useState({});     // data edit sementara
   const [saving, setSaving]             = useState(false);
   const [toast, setToast]               = useState('');
   // Gambar referensi per quotation (key = quotation id, value = [{name, data}])
@@ -143,6 +145,73 @@ export default function QuotationsPage() {
       showToast('✅ Diskon dihapus');
     } catch(err) { showToast('❌ ' + err.message); }
     finally { setSaving(false); }
+  };
+
+  // ── Edit penawaran (draft only) ─────────────────────────
+  const startEdit = (q, e) => {
+    e?.stopPropagation();
+    setEditingId(q.id);
+    setEditDraft({
+      client_name:  q.client_name,
+      project_name: q.project_name,
+      notes:        q.notes || '',
+      selling_price: String(q.selling_price || ''),
+      items: (q.quotation_items || []).map(i => ({
+        item_name:  i.item_name,
+        unit_price: i.unit_price,
+        qty:        i.qty,
+        unit:       i.unit || 'pcs',
+      })),
+    });
+  };
+
+  const saveEdit = async (q, e) => {
+    e?.stopPropagation();
+    if (!editDraft.client_name?.trim()) return showToast('⚠️ Nama klien tidak boleh kosong');
+    setSaving(true);
+    try {
+      const sp = parseFloat(editDraft.selling_price) || 0;
+      const updated = await updateQuotation(q.id, {
+        client_name:  editDraft.client_name.trim(),
+        project_name: editDraft.project_name.trim(),
+        notes:        editDraft.notes,
+        selling_price: sp,
+        items:        editDraft.items,
+      });
+      // Hitung ulang total_hpp dari items
+      const newHPP = editDraft.items.reduce((s, i) => s + i.unit_price * i.qty, 0);
+      const merged = {
+        ...q,
+        ...updated,
+        total_hpp: newHPP,
+        quotation_items: editDraft.items.map((i, idx) => ({
+          ...i, id: `tmp-${idx}`, subtotal: i.unit_price * i.qty, quotation_id: q.id,
+        })),
+      };
+      setQuotations(prev => prev.map(x => x.id === q.id ? merged : x));
+      setSelected(merged);
+      setEditingId(null);
+      showToast('✅ Penawaran diperbarui');
+    } catch(err) { showToast('❌ ' + err.message); }
+    finally { setSaving(false); }
+  };
+
+  const editItem = (idx, field, value) => {
+    setEditDraft(d => ({
+      ...d,
+      items: d.items.map((it, i) => i === idx ? { ...it, [field]: field === 'qty' || field === 'unit_price' ? parseFloat(value) || 0 : value } : it),
+    }));
+  };
+
+  const removeEditItem = (idx) => {
+    setEditDraft(d => ({ ...d, items: d.items.filter((_, i) => i !== idx) }));
+  };
+
+  const addEditItem = () => {
+    setEditDraft(d => ({
+      ...d,
+      items: [...d.items, { item_name: 'Item baru', unit_price: 0, qty: 1, unit: 'pcs' }],
+    }));
   };
 
   const handleImageUpload = (qId, e) => {
@@ -279,11 +348,20 @@ export default function QuotationsPage() {
                       <div style={{ fontSize:'0.75rem', color:'var(--text-muted)', textDecoration:'line-through' }}>{formatRp(q.selling_price)}</div>
                     )}
                     <div style={{ fontWeight:700, color:'var(--accent)', fontSize:'1rem' }}>{formatRp(fp)}</div>
-                    <button
-                      className="btn btn-sm"
-                      style={{ marginTop:4, padding:'2px 8px', color:'var(--danger)', background:'var(--danger-light)', border:'none', fontSize:'0.8rem' }}
-                      onClick={e => handleDelete(q.id, q.client_name, e)}
-                    >🗑️</button>
+                    <div style={{ display:'flex', gap:4, marginTop:4 }}>
+                      {q.status === 'draft' && (
+                        <button className="btn btn-sm"
+                          style={{ padding:'2px 8px', color:'var(--accent)', background:'var(--accent-light)', border:'none', fontSize:'0.8rem' }}
+                          onClick={e => { e.stopPropagation(); isOpen ? startEdit(q, e) : (setSelected(q), setTimeout(() => startEdit(q), 50)); }}>
+                          ✏️
+                        </button>
+                      )}
+                      <button className="btn btn-sm"
+                        style={{ padding:'2px 8px', color:'var(--danger)', background:'var(--danger-light)', border:'none', fontSize:'0.8rem' }}
+                        onClick={e => handleDelete(q.id, q.client_name, e)}>
+                        🗑️
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -291,6 +369,99 @@ export default function QuotationsPage() {
                 {isOpen && (
                   <div style={{ marginTop:14, borderTop:'1px solid var(--border)', paddingTop:14 }}
                     onClick={e => e.stopPropagation()}>
+
+                    {/* ── MODE EDIT (draft only) ───────────── */}
+                    {editingId === q.id ? (
+                      <div onClick={e => e.stopPropagation()}>
+                        <div style={{ fontWeight:700, color:'var(--accent)', fontSize:'0.88rem', marginBottom:12 }}>
+                          ✏️ Edit Penawaran
+                        </div>
+
+                        {/* Nama klien & project */}
+                        <div style={{ display:'flex', gap:8, marginBottom:8 }}>
+                          <div className="form-group" style={{ flex:1, marginBottom:0 }}>
+                            <label className="form-label">Nama Klien</label>
+                            <input className="form-input" value={editDraft.client_name}
+                              onChange={e => setEditDraft(d => ({...d, client_name:e.target.value}))} />
+                          </div>
+                        </div>
+                        <div className="form-group" style={{ marginBottom:10 }}>
+                          <label className="form-label">Nama Project / Booth</label>
+                          <input className="form-input" value={editDraft.project_name}
+                            onChange={e => setEditDraft(d => ({...d, project_name:e.target.value}))} />
+                        </div>
+
+                        {/* Items */}
+                        <div style={{ fontSize:'0.8rem', fontWeight:700, color:'var(--text-muted)', marginBottom:6, textTransform:'uppercase', letterSpacing:'0.5px' }}>
+                          Item Penawaran
+                        </div>
+                        {editDraft.items?.map((item, idx) => (
+                          <div key={idx} style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, padding:'10px', marginBottom:6 }}>
+                            <div style={{ display:'flex', gap:6, marginBottom:6 }}>
+                              <input className="form-input" style={{ flex:1, fontSize:'0.82rem' }}
+                                value={item.item_name}
+                                onChange={e => editItem(idx, 'item_name', e.target.value)} />
+                              <button style={{ color:'var(--danger)', background:'var(--danger-light)', border:'none', borderRadius:6, padding:'0 10px', cursor:'pointer', fontSize:'0.8rem' }}
+                                onClick={() => removeEditItem(idx)}>✕</button>
+                            </div>
+                            <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                              <div style={{ flex:1 }}>
+                                <label className="form-label" style={{ fontSize:'0.7rem' }}>Harga Satuan</label>
+                                <input className="form-input" type="number" style={{ fontSize:'0.82rem' }}
+                                  value={item.unit_price}
+                                  onChange={e => editItem(idx, 'unit_price', e.target.value)} />
+                              </div>
+                              <div style={{ width:80 }}>
+                                <label className="form-label" style={{ fontSize:'0.7rem' }}>Qty</label>
+                                <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                                  <button className="qty-btn" onClick={() => editItem(idx, 'qty', Math.max(1, item.qty - 1))}>−</button>
+                                  <span className="qty-value">{item.qty}</span>
+                                  <button className="qty-btn" onClick={() => editItem(idx, 'qty', item.qty + 1)}>+</button>
+                                </div>
+                              </div>
+                              <div style={{ textAlign:'right', fontSize:'0.8rem', fontWeight:700, color:'var(--accent)', minWidth:80, paddingTop:18 }}>
+                                {formatRp(item.unit_price * item.qty)}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        <button className="btn btn-ghost btn-sm btn-full" style={{ marginBottom:12, borderStyle:'dashed' }}
+                          onClick={addEditItem}>
+                          + Tambah Item
+                        </button>
+
+                        {/* Harga jual */}
+                        <div className="form-group" style={{ marginBottom:8 }}>
+                          <label className="form-label">Harga Jual ke Klien (Rp)</label>
+                          <input className="form-input" type="number"
+                            value={editDraft.selling_price}
+                            onChange={e => setEditDraft(d => ({...d, selling_price:e.target.value}))} />
+                        </div>
+
+                        {/* Catatan khusus */}
+                        <div className="form-group" style={{ marginBottom:12 }}>
+                          <label className="form-label">📝 Catatan Khusus (muncul di PDF)</label>
+                          <textarea className="form-input" rows={4}
+                            style={{ resize:'vertical', fontSize:'0.85rem' }}
+                            placeholder="Logo Depan File siap Cetak&#10;Bagian dalam ORI plywood&#10;Dll..."
+                            value={editDraft.notes}
+                            onChange={e => setEditDraft(d => ({...d, notes:e.target.value}))} />
+                        </div>
+
+                        {/* Simpan / Batal */}
+                        <div style={{ display:'flex', gap:8 }}>
+                          <button className="btn btn-primary" style={{ flex:2 }}
+                            disabled={saving} onClick={e => saveEdit(q, e)}>
+                            {saving ? '⏳ Menyimpan...' : '💾 Simpan Perubahan'}
+                          </button>
+                          <button className="btn btn-ghost" style={{ flex:1 }}
+                            onClick={e => { e.stopPropagation(); setEditingId(null); }}>
+                            Batal
+                          </button>
+                        </div>
+                        <div style={{ marginTop:12, borderBottom:'1px solid var(--border)', marginBottom:12 }} />
+                      </div>
+                    ) : null}
 
                     {/* Price breakdown internal */}
                     <div className="price-breakdown" style={{ marginBottom:12 }}>
