@@ -269,22 +269,45 @@ export async function generateQuotationPDF({
 
   // ── 6. Catatan — TANPA emoji ─────────────────────────────
   if (notes?.trim()) {
-    y += 10;
+    // Split per baris \n dulu, lalu wrap per lebar halaman
+    const rawLines  = notes.trim().split('\n');
+    const noteLines = rawLines.flatMap(line =>
+      doc.splitTextToSize(line.trim() || ' ', pageW - M*2)
+    );
+    const notesBlockH = 6 + 6 + noteLines.length * 4.8 + 6; // title + gap + content + bottom
+
+    // Pastikan ada ruang cukup — kalau tidak, pindah ke halaman baru
+    if (y + notesBlockH > pageH - 20) {
+      doc.addPage();
+      // Gambar footer di halaman lama sudah di-handle, cukup reset y
+      y = 20;
+    } else {
+      y += 8;
+    }
+
     doc.setFontSize(8.5);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...C.BLACK);
-    doc.text('Catatan Khusus:', M, y);   // hapus emoji 📝
+    doc.text('Catatan Khusus:', M, y);
+    y += 6;
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...C.GRAY);
-    const noteLines = doc.splitTextToSize(notes, pageW - M*2);
-    doc.text(noteLines, M, y + 5);
-    y += noteLines.length * 4.5 + 10;
+    noteLines.forEach(line => {
+      // Cek per baris — kalau sudah mepet footer, tambah halaman
+      if (y > pageH - 20) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.text(line, M, y);
+      y += 4.8;
+    });
+    y += 8;
   } else {
     y += 12;
   }
 
   // ── 7. Syarat & Ketentuan (dynamic height) ───────────────
-  if (y > pageH - 75) { doc.addPage(); y = 20; }
+  if (y > pageH - 85) { doc.addPage(); y = 20; }
 
   const TERMS = [
     '- Penawaran berlaku selama 3 hari sejak tanggal dikeluarkan.',
