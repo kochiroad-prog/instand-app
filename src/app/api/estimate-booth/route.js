@@ -69,7 +69,7 @@ BALAS HANYA DALAM FORMAT JSON INI (tanpa teks lain di luar JSON):
         'X-Title': 'INSTAND AI Estimator',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.0-flash-001',
+        model: 'anthropic/claude-3-haiku',
         messages: [
           {
             role: 'user',
