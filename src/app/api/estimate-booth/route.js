@@ -44,41 +44,55 @@ export async function POST(request) {
     }
 
     // ── Bangun katalog produk sebagai konteks ────────────────
-    const catalog = (products || []).map(p =>
-      `[${CAT_LABEL[p.category] || p.category}] ${p.name}${p.keterangan ? ' ('+p.keterangan+')' : ''} — Rp ${Number(p.unit_price).toLocaleString('id-ID')} per ${p.unit || 'pcs'} | id:${p.id}`
-    ).join('\n');
+    const byCategory = {};
+    (products || []).forEach(p => {
+      const cat = CAT_LABEL[p.category] || p.category;
+      if (!byCategory[cat]) byCategory[cat] = [];
+      byCategory[cat].push(`  • ${p.name}${p.keterangan ? ' ('+p.keterangan+')' : ''} — Rp ${Number(p.unit_price).toLocaleString('id-ID')} per ${p.unit || 'pcs'} [id:${p.id}]`);
+    });
+    const catalog = Object.entries(byCategory)
+      .map(([cat, items]) => `### ${cat}\n${items.join('\n')}`)
+      .join('\n\n');
 
-    const systemPrompt = `Kamu adalah AI estimator harga untuk INSTAND, perusahaan yang membuat booth portable profesional.
+    // Knowledge base WAJIB dibaca dulu sebelum analisa
+    const kbSection = knowledgeContext
+      ? `\n\n=== KNOWLEDGE BASE WAJIB DIBACA ===\n${knowledgeContext.replace('=== KNOWLEDGE BASE INSTAND ===\n','')}\n=== END KNOWLEDGE BASE ===`
+      : '';
 
-KATALOG PRODUK YANG TERSEDIA:
-${catalog}${knowledgeContext}
+    const systemPrompt = `Kamu adalah AI estimator harga INSTAND — perusahaan booth portable profesional di Malang.
+${kbSection}
 
-TUGAS:
-Analisa gambar booth portable yang diberikan. Identifikasi komponen-komponen yang terlihat atau kemungkinan digunakan, lalu cocokkan dengan katalog di atas untuk membuat estimasi biaya produksi (HPP).
+=== LANGKAH ANALISA (ikuti urutan ini) ===
+LANGKAH 1 — Baca Knowledge Base di atas dengan seksama, terutama bagian pricelist, contoh rincian, dan pola kombinasi item.
+LANGKAH 2 — Analisa gambar: identifikasi tipe booth, ukuran (perkiraan panjang x lebar), material, dan semua komponen yang terlihat.
+LANGKAH 3 — Cocokkan setiap komponen yang terlihat dengan produk di KATALOG di bawah. Gunakan nama produk PERSIS dari katalog.
+LANGKAH 4 — Jika ada payung/parasol terlihat → cari "Payung" di katalog. Jika ada roda → cari "Roda". Jika ada neon/lightbox → cari "Neonbox" atau "Lightbox". Jangan skip komponen yang terlihat jelas.
+LANGKAH 5 — Pastikan ada minimal 1 item booth_base kecuali jika gambar hanya menampilkan aksesori.
 
-ATURAN PENTING:
-- Pilih HANYA produk yang ada di katalog di atas. Jangan mengarang produk baru.
-- Gunakan field "id" dari katalog untuk field product_id di output.
-- Estimasi qty secara logis berdasarkan ukuran booth yang terlihat.
-- Jika ada beberapa pilihan, pilih yang paling sesuai secara visual.
-- Jika booth terlihat besar, estimasi qty lebih banyak.
-- Fokus ke booth_base dulu, lalu add-on, lalu ongkir jika terlihat.
+=== KATALOG PRODUK TERSEDIA ===
+${catalog}
 
-BALAS HANYA DALAM FORMAT JSON INI (tanpa teks lain di luar JSON):
+=== ATURAN OUTPUT ===
+- HANYA gunakan produk dari katalog di atas (gunakan id yang tertera)
+- Validasi harga dengan knowledge base pricelist
+- Jika gambar menunjukkan komponen spesifik, WAJIB masukkan ke items
+- qty logis: payung 1 pcs, wingside bisa 2-3 pcs, kelistrikan sesuai jumlah lampu
+
+BALAS HANYA FORMAT JSON INI (tanpa teks lain):
 {
-  "analisis": "Deskripsi singkat booth: tipe, ukuran perkiraan, material yang terlihat, fitur utama",
+  "analisis": "Deskripsi booth: tipe, ukuran perkiraan, material terlihat, fitur utama",
   "confidence": "tinggi|sedang|rendah",
   "items": [
     {
       "product_id": "id dari katalog",
-      "product_name": "nama produk dari katalog",
+      "product_name": "nama produk PERSIS dari katalog",
       "qty": 1,
       "unit_price": 0,
       "unit": "pcs",
-      "alasan": "kenapa item ini dipilih berdasarkan gambar"
+      "alasan": "komponen ini terlihat di gambar karena..."
     }
   ],
-  "catatan": "asumsi atau catatan tambahan untuk sales"
+  "catatan": "asumsi yang dibuat, komponen yang tidak terlihat jelas tapi kemungkinan ada"
 }`;
 
     // ── Panggil OpenRouter ───────────────────────────────────

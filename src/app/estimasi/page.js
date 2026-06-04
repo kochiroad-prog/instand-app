@@ -32,10 +32,28 @@ const estCostIDR = (inputTok, outputTok) => {
 
 const STEPS = [
   'Membaca gambar booth...',
+  'Mengambil knowledge base INSTAND...',
   'Mengenali komponen & material...',
-  'Mencocokkan dengan katalog produk...',
-  'Menghitung estimasi harga...',
+  'Mencocokkan dengan katalog & database harga...',
+  'Memvalidasi estimasi harga...',
 ];
+
+// Kompres gambar untuk disimpan (max 400px, JPEG 60%)
+async function compressImage(base64, maxPx = 400) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const ratio = Math.min(maxPx / img.width, maxPx / img.height, 1);
+      const canvas = document.createElement('canvas');
+      canvas.width  = Math.round(img.width  * ratio);
+      canvas.height = Math.round(img.height * ratio);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.6));
+    };
+    img.onerror = () => resolve(null);
+    img.src = base64;
+  });
+}
 
 const fmtDate = (ts) => new Date(ts).toLocaleDateString('id-ID', {
   day: '2-digit', month: 'short', year: 'numeric',
@@ -151,9 +169,14 @@ export default function EstimasiPage() {
   const totalHPP  = items.reduce((s, i) => s + i.unit_price * i.qty, 0);
   const hargaJual = toSell(totalHPP, margin);
 
-  // ── Simpan estimasi ke localStorage ──────────────────────
-  const saveEstimation = () => {
+  // ── Simpan estimasi ke localStorage (dengan thumbnail gambar) ──
+  const saveEstimation = async () => {
     if (!result || !items.length) return showToast('Tidak ada hasil untuk disimpan');
+    // Kompres gambar sebelum simpan (hemat localStorage)
+    let thumbnail = null;
+    if (imgBase64) {
+      thumbnail = await compressImage(imgBase64, 350).catch(() => null);
+    }
     const entry = {
       id:        Date.now(),
       date:      Date.now(),
@@ -164,11 +187,22 @@ export default function EstimasiPage() {
       margin,
       catatan:   result.catatan || '',
       biaya:     actualCost?.idr || estCost,
+      thumbnail,               // gambar terkompresi untuk preview
+      description,             // keterangan yang dipakai
     };
-    const updated = [entry, ...savedList].slice(0, 20); // max 20 tersimpan
+    const updated = [entry, ...savedList].slice(0, 15); // max 15 (hemat storage)
     setSavedList(updated);
-    try { localStorage.setItem(SAVED_KEY, JSON.stringify(updated)); } catch {}
-    showToast('✅ Estimasi disimpan!');
+    try {
+      localStorage.setItem(SAVED_KEY, JSON.stringify(updated));
+      showToast('✅ Estimasi + gambar disimpan!');
+    } catch (e) {
+      // localStorage penuh → simpan tanpa gambar
+      const entryNoImg = { ...entry, thumbnail: null };
+      const updatedNoImg = [entryNoImg, ...savedList].slice(0, 15);
+      setSavedList(updatedNoImg);
+      localStorage.setItem(SAVED_KEY, JSON.stringify(updatedNoImg));
+      showToast('✅ Estimasi disimpan (gambar terlalu besar, tidak ikut tersimpan)');
+    }
   };
 
   // ── Hapus estimasi tersimpan ──────────────────────────────
@@ -178,11 +212,12 @@ export default function EstimasiPage() {
     try { localStorage.setItem(SAVED_KEY, JSON.stringify(updated)); } catch {}
   };
 
-  // ── Buat penawaran dari estimasi ──────────────────────────
-  const goToQuotation = (overrideItems, overrideHPP, overrideSell) => {
+  // ── Buat rincian dari estimasi (gambar ikut diteruskan) ────
+  const goToQuotation = async (overrideItems, overrideHPP, overrideSell, overrideImg) => {
     const useItems = overrideItems || items;
     const useHPP   = overrideHPP   ?? totalHPP;
     const useSell  = overrideSell  ?? hargaJual;
+    const useImg   = overrideImg   ?? imgBase64;
     if (!useItems.length) return showToast('Tidak ada item');
     const cartItems = useItems.map(i => ({
       item_name: i.product_name, unit_price: i.unit_price, qty: i.qty, unit: i.unit || 'pcs',
@@ -190,6 +225,13 @@ export default function EstimasiPage() {
     sessionStorage.setItem('calc_items',   JSON.stringify(cartItems));
     sessionStorage.setItem('calc_hpp',     String(useHPP));
     sessionStorage.setItem('calc_selling', String(useSell));
+    // Simpan gambar untuk ditampilkan di form rincian
+    if (useImg) {
+      try {
+        const thumb = await compressImage(useImg, 800);
+        if (thumb) sessionStorage.setItem('est_image', JSON.stringify([{ name: 'Referensi AI Estimasi', data: thumb }]));
+      } catch {}
+    }
     router.push('/quotation/new');
   };
 
@@ -221,27 +263,40 @@ export default function EstimasiPage() {
             <div className="card-title" style={{ marginBottom:10 }}>📂 Estimasi Tersimpan</div>
             {savedList.map(e => (
               <div key={e.id} style={{ padding:'10px 12px', marginBottom:6, background:'var(--surface)', borderRadius:8, border:'1px solid var(--border)' }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:4 }}>
-                  <div>
-                    <div style={{ fontSize:'0.82rem', fontWeight:700, color:'var(--text-primary)' }}>{e.analisis?.slice(0,60)}...</div>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:6 }}>
+                  {/* Thumbnail gambar jika ada */}
+                  {e.thumbnail && (
+                    <img src={e.thumbnail} alt="ref"
+                      style={{ width:52, height:52, objectFit:'cover', borderRadius:6, border:'1px solid var(--border)', flexShrink:0, marginRight:8 }} />
+                  )}
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:'0.82rem', fontWeight:700, color:'var(--text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{e.analisis?.slice(0,55)}...</div>
                     <div style={{ fontSize:'0.72rem', color:'var(--text-muted)', marginTop:2 }}>
                       {fmtDate(e.date)} · {e.items.length} item · {rp(e.hargaJual)}
                     </div>
+                    {e.description && (
+                      <div style={{ fontSize:'0.7rem', color:'var(--accent)', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                        📝 {e.description.slice(0,40)}
+                      </div>
+                    )}
                   </div>
                   <button onClick={() => deleteEstimation(e.id)}
-                    style={{ color:'var(--danger)', background:'none', border:'none', cursor:'pointer', fontSize:'0.9rem' }}>
+                    style={{ color:'var(--danger)', background:'none', border:'none', cursor:'pointer', fontSize:'0.9rem', flexShrink:0, marginLeft:4 }}>
                     🗑️
                   </button>
                 </div>
                 <div style={{ display:'flex', gap:6, marginTop:6 }}>
                   <button className="btn btn-primary btn-sm" style={{ flex:2, fontSize:'0.75rem' }}
-                    onClick={() => goToQuotation(e.items, e.totalHPP, e.hargaJual)}>
+                    onClick={() => goToQuotation(e.items, e.totalHPP, e.hargaJual, e.thumbnail)}>
                     📄 Buat Rincian
                   </button>
                   <button className="btn btn-ghost btn-sm" style={{ flex:1, fontSize:'0.75rem' }}
                     onClick={() => {
                       setItems(e.items); setMargin(e.margin);
                       setResult({ analisis: e.analisis, catatan: e.catatan, confidence:'sedang' });
+                      // Restore gambar jika ada thumbnail
+                      if (e.thumbnail) { setImgPreview(e.thumbnail); setImgBase64(e.thumbnail); }
+                      setDescription(e.description || '');
                       setShowSaved(false); showToast('Estimasi dimuat');
                     }}>
                     ✏️ Edit

@@ -23,9 +23,18 @@ export default function NewQuotationPage() {
     const storedItems   = sessionStorage.getItem('calc_items');
     const storedHPP     = sessionStorage.getItem('calc_hpp');
     const storedSelling = sessionStorage.getItem('calc_selling');
+    const storedImages  = sessionStorage.getItem('est_image');
     if (storedItems)   setItems(JSON.parse(storedItems));
     if (storedHPP)     setTotalHPP(parseFloat(storedHPP));
     if (storedSelling) setSellingPrice(parseFloat(storedSelling));
+    // Gambar dari AI Estimator — load otomatis sebagai referensi desain
+    if (storedImages) {
+      try {
+        const imgs = JSON.parse(storedImages);
+        if (imgs?.length) setRefImages(imgs);
+      } catch {}
+      sessionStorage.removeItem('est_image');
+    }
   }, []);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2500); };
