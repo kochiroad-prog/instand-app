@@ -236,7 +236,7 @@ export default function EstimasiPage() {
                 <div style={{ display:'flex', gap:6, marginTop:6 }}>
                   <button className="btn btn-primary btn-sm" style={{ flex:2, fontSize:'0.75rem' }}
                     onClick={() => goToQuotation(e.items, e.totalHPP, e.hargaJual)}>
-                    📄 Buat Penawaran
+                    📄 Buat Rincian
                   </button>
                   <button className="btn btn-ghost btn-sm" style={{ flex:1, fontSize:'0.75rem' }}
                     onClick={() => {
@@ -476,7 +476,7 @@ export default function EstimasiPage() {
             <div style={{ display:'flex', gap:8, marginBottom:20 }}>
               <button className="btn btn-primary" style={{ flex:3, padding:'13px', fontSize:'0.88rem' }}
                 onClick={() => goToQuotation()}>
-                📄 Buat Penawaran
+                📄 Buat Rincian
               </button>
               <button className="btn btn-ghost" style={{ flex:2, padding:'13px', fontSize:'0.88rem', border:'1.5px solid var(--accent)', color:'var(--accent)' }}
                 onClick={saveEstimation}>

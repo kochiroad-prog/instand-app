@@ -48,7 +48,7 @@ export default function DashboardPage() {
     <div>
       <div className="page-header">
         <h1>📊 Dashboard</h1>
-        <p>Analitik penawaran &amp; penjualan</p>
+        <p>Analitik rincian &amp; penjualan</p>
       </div>
 
       <div className="page-body">
@@ -57,7 +57,7 @@ export default function DashboardPage() {
         <div className="stats-grid">
           <div className="stat-card">
             <div className="stat-value">{total || 0}</div>
-            <div className="stat-label">Total Penawaran</div>
+            <div className="stat-label">Total Rincian</div>
           </div>
           <div className="stat-card accent">
             <div className="stat-value">{formatRp(totalRevenue || 0)}</div>
@@ -103,14 +103,14 @@ export default function DashboardPage() {
             </div>
 
             <div className="card">
-              <div className="card-title">📊 Jumlah Penawaran per Bulan</div>
+              <div className="card-title">📊 Jumlah Rincian per Bulan</div>
               <ResponsiveContainer width="100%" height={160}>
                 <LineChart data={monthly} margin={{ top:5, right:10, left:0, bottom:5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="month" tick={{ fontSize:10 }} />
                   <YAxis allowDecimals={false} tick={{ fontSize:10 }} width={25} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Line type="monotone" dataKey="penawaran" name="Penawaran" stroke="#f97316" strokeWidth={2.5} dot={{ r:4, fill:'#f97316' }} />
+                  <Line type="monotone" dataKey="rincian" name="Rincian" stroke="#f97316" strokeWidth={2.5} dot={{ r:4, fill:'#f97316' }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -119,7 +119,7 @@ export default function DashboardPage() {
           <div className="empty-state">
             <div className="empty-state-icon">📊</div>
             <div className="empty-state-text">Belum ada data untuk ditampilkan</div>
-            <div className="empty-state-sub">Buat penawaran pertama Anda untuk melihat grafik</div>
+            <div className="empty-state-sub">Buat rincian pertama Anda untuk melihat grafik</div>
           </div>
         )}
       </div>

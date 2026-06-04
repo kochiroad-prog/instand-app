@@ -1,7 +1,7 @@
 {
   "name": "INSTAND — Booth Portable",
   "short_name": "INSTAND",
-  "description": "Aplikasi sales INSTAND untuk kalkulator harga & penawaran PDF",
+  "description": "Aplikasi sales INSTAND untuk kalkulator harga & rincian PDF",
   "start_url": "/calculator",
   "display": "standalone",
   "background_color": "#1a1a2e",

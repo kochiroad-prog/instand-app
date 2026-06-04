@@ -466,7 +466,7 @@ export default function CalculatorPage() {
             onClick={goToQuotation}
             disabled={!selectedBase || hargaJual <= 0}
           >
-            📄 Buat Penawaran →
+            📄 Buat Rincian →
           </button>
         </div>
 

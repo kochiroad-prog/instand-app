@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { createQuotation } from '@/lib/supabase';
+import { createQuotation, saveQuotationImages } from '@/lib/supabase';
 import { generateQuotationPDF } from '@/lib/pdf';
 
 const formatRp = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID');
@@ -62,11 +62,15 @@ export default function NewQuotationPage() {
     if (items.length === 0) return showToast('⚠️ Tidak ada item — kembali ke kalkulator');
     setSaving(true);
     try {
-      await createQuotation({ client_name: clientName, project_name: projectName, total_hpp: totalHPP, selling_price: sellingPrice, notes, items });
+      const saved = await createQuotation({ client_name: clientName, project_name: projectName, total_hpp: totalHPP, selling_price: sellingPrice, notes, items });
+      // Simpan gambar referensi ke Supabase jika ada
+      if (refImages.length > 0 && saved?.id) {
+        await saveQuotationImages(saved.id, refImages).catch(() => {});
+      }
       sessionStorage.removeItem('calc_items');
       sessionStorage.removeItem('calc_hpp');
       sessionStorage.removeItem('calc_selling');
-      showToast('✅ Penawaran tersimpan!');
+      showToast('✅ Rincian tersimpan!');
       setTimeout(() => router.push('/quotations'), 1000);
     } catch (e) {
       showToast('❌ Gagal simpan: ' + e.message);
@@ -93,7 +97,7 @@ export default function NewQuotationPage() {
       <div className="page-header">
         <div className="flex-between">
           <div>
-            <h1>📄 Buat Penawaran</h1>
+            <h1>📄 Buat Rincian</h1>
             <p>Isi data klien &amp; simpan / export PDF</p>
           </div>
           <button onClick={() => router.back()} style={{ color:'rgba(255,255,255,0.7)', fontSize:'1.5rem', background:'none', border:'none', cursor:'pointer' }}>←</button>
@@ -170,7 +174,7 @@ export default function NewQuotationPage() {
         <div className="card" style={{ marginBottom:16 }}>
           <div className="card-title">🖼️ Referensi Desain (opsional)</div>
           <p style={{ fontSize:'0.82rem', color:'var(--text-secondary)', marginBottom:10 }}>
-            Upload gambar referensi desain klien. Akan muncul di halaman terakhir PDF penawaran.
+            Upload gambar referensi desain klien. Akan muncul di halaman terakhir PDF rincian.
           </p>
 
           {/* Hidden file input */}

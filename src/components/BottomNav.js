@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 const navItems = [
   { href: '/calculator', icon: '🧮', label: 'Kalkulator' },
   { href: '/estimasi',   icon: '🤖', label: 'AI Est.'    },
-  { href: '/quotations', icon: '📄', label: 'Penawaran'  },
+  { href: '/quotations', icon: '📄', label: 'Rincian'  },
   { href: '/pricelist',  icon: '📦', label: 'Pricelist'  },
   { href: '/dashboard',  icon: '📊', label: 'Dashboard'  },
   { href: '/settings',   icon: '⚙️', label: 'Kelola'     },

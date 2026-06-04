@@ -1,4 +1,11 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+// ── Supabase server-side client ───────────────────────────────
+const getSupabase = () => createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 // ── Kategori label untuk konteks AI ──────────────────────────
 const CAT_LABEL = {
@@ -11,6 +18,21 @@ const CAT_LABEL = {
 export async function POST(request) {
   try {
     const { imageBase64, products, description } = await request.json();
+
+    // ── Ambil AI Knowledge Base dari Supabase ────────────────
+    let knowledgeContext = '';
+    try {
+      const supabase = getSupabase();
+      const { data: knowledge } = await supabase
+        .from('ai_knowledge_base')
+        .select('title, content, category')
+        .eq('is_active', true)
+        .order('category');
+      if (knowledge?.length) {
+        knowledgeContext = '\n\n=== KNOWLEDGE BASE INSTAND ===\n' +
+          knowledge.map(k => `## ${k.title}\n${k.content}`).join('\n\n');
+      }
+    } catch { /* knowledge base optional */ }
 
     if (!imageBase64) {
       return NextResponse.json({ error: 'Gambar tidak ditemukan' }, { status: 400 });
@@ -29,7 +51,7 @@ export async function POST(request) {
     const systemPrompt = `Kamu adalah AI estimator harga untuk INSTAND, perusahaan yang membuat booth portable profesional.
 
 KATALOG PRODUK YANG TERSEDIA:
-${catalog}
+${catalog}${knowledgeContext}
 
 TUGAS:
 Analisa gambar booth portable yang diberikan. Identifikasi komponen-komponen yang terlihat atau kemungkinan digunakan, lalu cocokkan dengan katalog di atas untuk membuat estimasi biaya produksi (HPP).

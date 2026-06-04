@@ -223,6 +223,72 @@ export async function deleteQuotation(id) {
   if (error) throw error;
 }
 
+// ── Quotation Images ──────────────────────────────────────
+export async function saveQuotationImages(quotation_id, images) {
+  // images = [{ name, data (base64) }]
+  if (!images || images.length === 0) return;
+  const rows = images.map((img, i) => ({
+    quotation_id,
+    image_data: img.data,
+    file_name:  img.name || '',
+    sort_order: i,
+  }));
+  const { error } = await supabase.from('quotation_images').insert(rows);
+  if (error) throw error;
+}
+
+export async function getQuotationImages(quotation_id) {
+  const { data, error } = await supabase
+    .from('quotation_images')
+    .select('*')
+    .eq('quotation_id', quotation_id)
+    .order('sort_order');
+  if (error) return [];
+  return data;
+}
+
+export async function deleteQuotationImages(quotation_id) {
+  await supabase.from('quotation_images').delete().eq('quotation_id', quotation_id);
+}
+
+// ── AI Knowledge Base ─────────────────────────────────────
+export async function getAIKnowledge() {
+  const { data, error } = await supabase
+    .from('ai_knowledge_base')
+    .select('*')
+    .eq('is_active', true)
+    .order('category');
+  if (error) return [];
+  return data;
+}
+
+export async function updateAIKnowledge(id, { title, content, category }) {
+  const { data, error } = await supabase
+    .from('ai_knowledge_base')
+    .update({ title, content, category, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function addAIKnowledge({ title, content, category }) {
+  const { data, error } = await supabase
+    .from('ai_knowledge_base')
+    .insert({ title, content, category })
+    .select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteAIKnowledge(id) {
+  const { error } = await supabase
+    .from('ai_knowledge_base')
+    .update({ is_active: false })
+    .eq('id', id);
+  if (error) throw error;
+}
+
 // ── Dashboard analytics ───────────────────────────────────
 export async function getDashboardStats() {
   const { data, error } = await supabase
@@ -243,8 +309,8 @@ export async function getDashboardStats() {
   const monthly = {};
   data.forEach(q => {
     const month = q.created_at?.slice(0, 7);
-    if (!monthly[month]) monthly[month] = { month, penawaran: 0, revenue: 0, laba: 0 };
-    monthly[month].penawaran++;
+    if (!monthly[month]) monthly[month] = { month, rincian: 0, revenue: 0, laba: 0 };
+    monthly[month].rincian++;
     monthly[month].revenue += finalPrice(q);
     monthly[month].laba += finalPrice(q) - (q.total_hpp || 0);
   });

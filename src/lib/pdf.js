@@ -112,7 +112,7 @@ export async function generateQuotationPDF({
   doc.setTextColor(...C.WHITE);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.text('SURAT PENAWARAN HARGA', pageW - M, LOGO_Y + 8, { align:'right' });
+  doc.text('SURAT RINCIAN HARGA', pageW - M, LOGO_Y + 8, { align:'right' });
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(180, 220, 190);
@@ -157,7 +157,7 @@ export async function generateQuotationPDF({
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...C.BLACK);
-  const intro = 'Dengan hormat, bersama ini kami dari INSTAND mengajukan penawaran harga untuk ' +
+  const intro = 'Dengan hormat, bersama ini kami dari INSTAND mengajukan rincian harga untuk ' +
     project_name + ' sesuai kebutuhan yang telah didiskusikan. Berikut daftar spesifikasi booth yang kami tawarkan:';
   const introLines = doc.splitTextToSize(intro, pageW - M*2);
   doc.text(introLines, M, y);
@@ -218,7 +218,7 @@ export async function generateQuotationPDF({
   const finalPrc = selling_price - (hasDisc ? discount_amount : 0);
 
   if (hasDisc) {
-    // Baris: Harga Penawaran
+    // Baris: Harga Rincian
     doc.setFillColor(...C.LIGHT_BG);
     doc.setDrawColor(...C.LIGHT);
     doc.setLineWidth(0.3);
@@ -226,7 +226,7 @@ export async function generateQuotationPDF({
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...C.GRAY);
-    doc.text('Harga Penawaran', BOX_X + 4, y + 6.5);
+    doc.text('Harga Rincian', BOX_X + 4, y + 6.5);
     doc.text(rp(selling_price), pageW - M - 3, y + 6.5, { align:'right' });
     y += 10;
 
@@ -254,7 +254,7 @@ export async function generateQuotationPDF({
   doc.setTextColor(...C.WHITE);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(hasDisc ? 8 : 8.5);
-  doc.text(hasDisc ? 'TOTAL BAYAR' : 'TOTAL HARGA PENAWARAN', BOX_X + 4, y + (hasDisc ? 5.5 : 6));
+  doc.text(hasDisc ? 'TOTAL BAYAR' : 'TOTAL HARGA RINCIAN', BOX_X + 4, y + (hasDisc ? 5.5 : 6));
   doc.setFontSize(hasDisc ? 12 : 13);
   doc.text(rp(finalPrc), pageW - M - 3, y + (hasDisc ? 11.5 : 13), { align:'right' });
 
@@ -310,7 +310,7 @@ export async function generateQuotationPDF({
   if (y > pageH - 85) { doc.addPage(); y = 20; }
 
   const TERMS = [
-    '- Penawaran berlaku selama 3 hari sejak tanggal dikeluarkan.',
+    '- Rincian berlaku selama 3 hari sejak tanggal dikeluarkan.',
     '- DP 50% untuk konfirmasi order, pelunasan sebelum pengiriman.',
     '- Estimasi pengerjaan 7-14 hari kerja setelah DP diterima.',
     '- Harga belum termasuk ongkos kirim (jika tidak tercantum di atas).',
@@ -462,7 +462,7 @@ export async function generateQuotationPDF({
   }
 
   // ── 11. Save ─────────────────────────────────────────────
-  const fname = 'Penawaran_INSTAND_' +
+  const fname = 'Rincian_INSTAND_' +
     client_name.replace(/\s+/g,'_') + '_' +
     today.getFullYear() +
     String(today.getMonth()+1).padStart(2,'0') +

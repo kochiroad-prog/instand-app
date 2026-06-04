@@ -4,7 +4,7 @@ import NavigationWrapper from '@/components/NavigationWrapper';
 
 export const metadata = {
   title: 'INSTAND — Kalkulator Booth Portable',
-  description: 'Aplikasi sales INSTAND untuk hitung harga & buat penawaran PDF',
+  description: 'Aplikasi sales INSTAND untuk hitung harga & buat rincian PDF',
   manifest: '/manifest.json',
   themeColor: '#1a1a2e',
   appleWebApp: {

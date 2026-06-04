@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { getQuotations, updateQuotationStatus, updateQuotationDiscount, updateQuotation, deleteQuotation } from '@/lib/supabase';
+import { getQuotations, updateQuotationStatus, updateQuotationDiscount, updateQuotation, deleteQuotation, getQuotationImages, saveQuotationImages, deleteQuotationImages } from '@/lib/supabase';
 import { generateQuotationPDF } from '@/lib/pdf';
 
 const formatRp = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID');
@@ -22,9 +22,9 @@ const STATUS_NEXT_LABELS = {
 };
 
 const FLOW_GUIDE = [
-  { step:'1',  icon:'📝', status:'Draft',    color:'#4a7c59', desc:'Penawaran baru dibuat, belum dikirim ke klien.',        action:'→ Export PDF → kirim via WA/Email ke klien.' },
+  { step:'1',  icon:'📝', status:'Draft',    color:'#4a7c59', desc:'Rincian baru dibuat, belum dikirim ke klien.',        action:'→ Export PDF → kirim via WA/Email ke klien.' },
   { step:'2',  icon:'📤', status:'Terkirim', color:'#1a6ba0', desc:'PDF sudah dikirim, menunggu balasan klien.',            action:'→ Tandai "Terkirim" agar tercatat kapan dikirim.' },
-  { step:'3a', icon:'✅', status:'Diterima', color:'#15803d', desc:'Klien setuju! Penawaran deal.',                         action:'→ Tandai "Diterima". Data masuk laporan penjualan.' },
+  { step:'3a', icon:'✅', status:'Diterima', color:'#15803d', desc:'Klien setuju! Rincian deal.',                         action:'→ Tandai "Diterima". Data masuk laporan penjualan.' },
   { step:'3b', icon:'❌', status:'Ditolak',  color:'#b91c1c', desc:'Klien minta harga lebih rendah atau tidak jadi.',      action:'→ Klik "Beri Diskon", set diskon, kirim PDF baru.' },
 ];
 
@@ -38,7 +38,7 @@ export default function QuotationsPage() {
   const [discountId, setDiscountId]     = useState(null);
   const [discType, setDiscType]         = useState('pct');
   const [discValue, setDiscValue]       = useState('');
-  const [editingId, setEditingId]       = useState(null);   // id penawaran yg sedang diedit
+  const [editingId, setEditingId]       = useState(null);   // id rincian yg sedang diedit
   const [editDraft, setEditDraft]       = useState({});     // data edit sementara
   const [saving, setSaving]             = useState(false);
   const [toast, setToast]               = useState('');
@@ -77,12 +77,12 @@ export default function QuotationsPage() {
 
   const handleDelete = async (id, name, e) => {
     e?.stopPropagation();
-    if (!confirm(`Hapus penawaran untuk "${name}"?`)) return;
+    if (!confirm(`Hapus rincian untuk "${name}"?`)) return;
     try {
       await deleteQuotation(id);
       setQuotations(prev => prev.filter(q => q.id !== id));
       if (selected?.id === id) setSelected(null);
-      showToast('🗑️ Penawaran dihapus');
+      showToast('🗑️ Rincian dihapus');
     } catch(err) { showToast('❌ ' + err.message); }
   };
 
@@ -123,7 +123,7 @@ export default function QuotationsPage() {
     e?.stopPropagation();
     const discRp = calcDiscRp(q);
     if (discRp < 0) return showToast('⚠️ Diskon tidak boleh negatif');
-    if (discRp >= (q.selling_price || 0)) return showToast('⚠️ Diskon melebihi harga penawaran');
+    if (discRp >= (q.selling_price || 0)) return showToast('⚠️ Diskon melebihi harga rincian');
     setSaving(true);
     try {
       await updateQuotationDiscount(q.id, discRp);
@@ -191,7 +191,7 @@ export default function QuotationsPage() {
       setQuotations(prev => prev.map(x => x.id === q.id ? merged : x));
       setSelected(merged);
       setEditingId(null);
-      showToast('✅ Penawaran diperbarui');
+      showToast('✅ Rincian diperbarui');
     } catch(err) { showToast('❌ ' + err.message); }
     finally { setSaving(false); }
   };
@@ -214,23 +214,36 @@ export default function QuotationsPage() {
     }));
   };
 
+  // Load gambar dari Supabase saat card dibuka pertama kali
+  const loadQImages = async (qId) => {
+    if (qImages[qId] !== undefined) return; // sudah pernah dimuat
+    const imgs = await getQuotationImages(qId);
+    setQImages(prev => ({
+      ...prev,
+      [qId]: imgs.map(i => ({ name: i.file_name || '', data: i.image_data, id: i.id })),
+    }));
+  };
+
   const handleImageUpload = (qId, e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
     files.forEach(file => {
       const reader = new FileReader();
-      reader.onload = (ev) => {
+      reader.onload = async (ev) => {
+        const newImg = { name: file.name, data: ev.target.result };
         setQImages(prev => ({
           ...prev,
-          [qId]: [...(prev[qId] || []), { name: file.name, data: ev.target.result }],
+          [qId]: [...(prev[qId] || []), newImg],
         }));
+        // Simpan langsung ke Supabase
+        await saveQuotationImages(qId, [newImg]).catch(() => {});
       };
       reader.readAsDataURL(file);
     });
     e.target.value = '';
   };
 
-  const removeQImage = (qId, idx, e) => {
+  const removeQImage = async (qId, idx, e) => {
     e?.stopPropagation();
     setQImages(prev => ({
       ...prev,
@@ -246,8 +259,8 @@ export default function QuotationsPage() {
       <div className="page-header">
         <div className="flex-between">
           <div>
-            <h1>📄 Riwayat Penawaran</h1>
-            <p>{quotations.length} penawaran tersimpan</p>
+            <h1>📄 Riwayat Rincian</h1>
+            <p>{quotations.length} rincian tersimpan</p>
           </div>
           <div style={{ display:'flex', gap:8 }}>
             <button
@@ -265,7 +278,7 @@ export default function QuotationsPage() {
         {/* ── Panduan Alur Status ──────────────────────── */}
         {showGuide && (
           <div className="card" style={{ marginBottom:14, borderColor:'var(--accent)', borderWidth:2 }}>
-            <div className="card-title" style={{ marginBottom:12 }}>📖 Cara Kerja Status Penawaran</div>
+            <div className="card-title" style={{ marginBottom:12 }}>📖 Cara Kerja Status Rincian</div>
             <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:14, flexWrap:'wrap' }}>
               {['draft','sent','accepted'].map((s, i) => (
                 <span key={s} style={{ display:'flex', alignItems:'center', gap:4 }}>
@@ -313,8 +326,8 @@ export default function QuotationsPage() {
         ) : filtered.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">📄</div>
-            <div className="empty-state-text">Belum ada penawaran</div>
-            <div className="empty-state-sub">Buat penawaran baru dari kalkulator</div>
+            <div className="empty-state-text">Belum ada rincian</div>
+            <div className="empty-state-sub">Buat rincian baru dari kalkulator</div>
           </div>
         ) : (
           filtered.map(q => {
@@ -324,7 +337,7 @@ export default function QuotationsPage() {
             const disc  = q.discount_amount || 0;
             return (
               <div key={q.id} className="card" style={{ marginBottom:10, cursor:'pointer', borderLeft:`3px solid ${st.color}` }}
-                onClick={() => setSelected(isOpen ? null : q)}>
+                onClick={() => { if (!isOpen) loadQImages(q.id); setSelected(isOpen ? null : q); }}>
 
                 {/* ── Card collapsed ───────────────────── */}
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8 }}>
@@ -374,7 +387,7 @@ export default function QuotationsPage() {
                     {editingId === q.id ? (
                       <div onClick={e => e.stopPropagation()}>
                         <div style={{ fontWeight:700, color:'var(--accent)', fontSize:'0.88rem', marginBottom:12 }}>
-                          ✏️ Edit Penawaran
+                          ✏️ Edit Rincian
                         </div>
 
                         {/* Nama klien & project */}
@@ -393,7 +406,7 @@ export default function QuotationsPage() {
 
                         {/* Items */}
                         <div style={{ fontSize:'0.8rem', fontWeight:700, color:'var(--text-muted)', marginBottom:6, textTransform:'uppercase', letterSpacing:'0.5px' }}>
-                          Item Penawaran
+                          Item Rincian
                         </div>
                         {editDraft.items?.map((item, idx) => (
                           <div key={idx} style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, padding:'10px', marginBottom:6 }}>
@@ -466,7 +479,7 @@ export default function QuotationsPage() {
                     {/* Price breakdown internal */}
                     <div className="price-breakdown" style={{ marginBottom:12 }}>
                       <div className="price-row"><span>Total HPP (Modal)</span><span>{formatRp(q.total_hpp)}</span></div>
-                      <div className="price-row"><span>Harga Penawaran Asal</span><span>{formatRp(q.selling_price)}</span></div>
+                      <div className="price-row"><span>Harga Rincian Asal</span><span>{formatRp(q.selling_price)}</span></div>
                       {disc > 0 && (
                         <div className="price-row" style={{ color:'#b45309' }}>
                           <span>🏷️ Diskon Diberikan</span><span>- {formatRp(disc)}</span>
@@ -537,7 +550,7 @@ export default function QuotationsPage() {
                           return (
                             <div style={{ background:'white', borderRadius:8, padding:'10px 12px', marginBottom:10, border:'1px solid #fde68a', fontSize:'0.82rem' }}>
                               <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-                                <span style={{ color:'var(--text-secondary)' }}>Harga Penawaran Asal</span>
+                                <span style={{ color:'var(--text-secondary)' }}>Harga Rincian Asal</span>
                                 <span style={{ fontWeight:600 }}>{formatRp(q.selling_price)}</span>
                               </div>
                               <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4, color:'#b45309' }}>
