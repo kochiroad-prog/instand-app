@@ -94,9 +94,9 @@ export default function EstimasiPage() {
     try {
       const sessionImg = sessionStorage.getItem(IMG_SESSION_KEY);
       if (sessionImg) {
-        const parsed = JSON.parse(sessionImg);
-        setImgPreview(parsed.preview);
-        setImgBase64(parsed.base64);
+        // Format baru: plain base64 string
+        setImgPreview(sessionImg);
+        setImgBase64(sessionImg);
       }
     } catch {}
   }, []);
@@ -107,20 +107,11 @@ export default function EstimasiPage() {
   const estOutputTok = 600;
   const estCost      = imgBase64 ? estCostIDR(estInputTok, estOutputTok) : 0;
 
-  // ── Simpan gambar ke sessionStorage ──────────────────────
-  const persistImage = (base64) => {
-    try {
-      // Kompres dulu sebelum simpan di session (hemat memory)
-      compressImage(base64, 800).then(compressed => {
-        if (compressed) {
-          sessionStorage.setItem(IMG_SESSION_KEY, JSON.stringify({ preview: compressed, base64: compressed }));
-        }
-      });
-    } catch {}
-  };
-
   const clearPersistedImage = () => {
-    try { sessionStorage.removeItem(IMG_SESSION_KEY); } catch {}
+    try {
+      sessionStorage.removeItem(IMG_SESSION_KEY);
+      sessionStorage.removeItem('est_image');
+    } catch {}
   };
 
   // ── Handle upload ─────────────────────────────────────────
@@ -132,7 +123,24 @@ export default function EstimasiPage() {
       setImgPreview(b64);
       setImgBase64(b64);
       setResult(null); setItems([]); setError(''); setErrType(''); setActualCost(null);
-      persistImage(b64);  // simpan ke session agar tidak hilang saat navigasi
+
+      // ── Simpan LANGSUNG ke sessionStorage (synchronous, no race condition) ──
+      try {
+        // est_img_session: untuk restore saat navigasi kembali ke halaman ini
+        sessionStorage.setItem(IMG_SESSION_KEY, b64);
+        // est_image: siap dibaca oleh /quotation/new kapan pun
+        sessionStorage.setItem('est_image', JSON.stringify([{ name: 'Referensi AI Estimasi', data: b64 }]));
+      } catch {
+        // Jika terlalu besar, kompres background dan simpan
+        compressImage(b64, 1000).then(c => {
+          if (c) {
+            try {
+              sessionStorage.setItem(IMG_SESSION_KEY, c);
+              sessionStorage.setItem('est_image', JSON.stringify([{ name: 'Referensi AI Estimasi', data: c }]));
+            } catch {}
+          }
+        });
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -242,26 +250,30 @@ export default function EstimasiPage() {
     try { localStorage.setItem(SAVED_KEY, JSON.stringify(updated)); } catch {}
   };
 
-  // ── Buat rincian dari estimasi (gambar ikut diteruskan) ────
-  const goToQuotation = async (overrideItems, overrideHPP, overrideSell, overrideImg) => {
+  // ── Buat rincian dari estimasi ────────────────────────────
+  const goToQuotation = (overrideItems, overrideHPP, overrideSell, overrideImg) => {
     const useItems = overrideItems || items;
     const useHPP   = overrideHPP   ?? totalHPP;
     const useSell  = overrideSell  ?? hargaJual;
-    const useImg   = overrideImg   ?? imgBase64;
     if (!useItems.length) return showToast('Tidak ada item');
+
     const cartItems = useItems.map(i => ({
       item_name: i.product_name, unit_price: i.unit_price, qty: i.qty, unit: i.unit || 'pcs',
     }));
     sessionStorage.setItem('calc_items',   JSON.stringify(cartItems));
     sessionStorage.setItem('calc_hpp',     String(useHPP));
     sessionStorage.setItem('calc_selling', String(useSell));
-    // Simpan gambar untuk ditampilkan di form rincian
-    if (useImg) {
+
+    // Gambar: pakai override (dari estimasi tersimpan) atau yang ada di session
+    // est_image sudah di-set saat upload — tidak perlu set ulang
+    if (overrideImg) {
+      // Dari estimasi tersimpan (thumbnail), timpa est_image
       try {
-        const thumb = await compressImage(useImg, 800);
-        if (thumb) sessionStorage.setItem('est_image', JSON.stringify([{ name: 'Referensi AI Estimasi', data: thumb }]));
+        sessionStorage.setItem('est_image', JSON.stringify([{ name: 'Referensi AI Estimasi', data: overrideImg }]));
       } catch {}
     }
+    // est_image dari upload live sudah ada — /quotation/new akan membacanya
+
     router.push('/quotation/new');
   };
 

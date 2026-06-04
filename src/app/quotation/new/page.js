@@ -25,36 +25,42 @@ export default function NewQuotationPage() {
     const storedItems   = sessionStorage.getItem('calc_items');
     const storedHPP     = sessionStorage.getItem('calc_hpp');
     const storedSelling = sessionStorage.getItem('calc_selling');
-    const storedImages  = sessionStorage.getItem('est_image');
+    const storedImages  = sessionStorage.getItem('est_image');   // JSON array [{name,data}]
     const storedDraft   = sessionStorage.getItem(FORM_DRAFT_KEY);
 
-    if (storedItems)   setItems(JSON.parse(storedItems));
+    if (storedItems)   { try { setItems(JSON.parse(storedItems)); } catch {} }
     if (storedHPP)     setTotalHPP(parseFloat(storedHPP));
     if (storedSelling) setSellingPrice(parseFloat(storedSelling));
 
-    // Gambar dari AI Estimator (prioritas) atau dari draft sebelumnya
+    // ── Muat gambar referensi ──────────────────────────────
+    // Prioritas 1: est_image dari AI Estimator (paling segar)
     if (storedImages) {
       try {
         const imgs = JSON.parse(storedImages);
-        if (imgs?.length) setRefImages(imgs);
+        if (Array.isArray(imgs) && imgs.length > 0) {
+          setRefImages(imgs);
+          // Simpan ke draft supaya survive re-render
+          try {
+            const d = storedDraft ? JSON.parse(storedDraft) : {};
+            sessionStorage.setItem(FORM_DRAFT_KEY, JSON.stringify({ ...d, images: storedImages }));
+          } catch {}
+          // Jangan hapus est_image — biarkan tetap ada untuk fallback
+          return; // gambar sudah dimuat, selesai
+        }
       } catch {}
-      // Jangan hapus est_image dulu — simpan ke draft
-      try {
-        const draft = storedDraft ? JSON.parse(storedDraft) : {};
-        sessionStorage.setItem(FORM_DRAFT_KEY, JSON.stringify({ ...draft, images: storedImages }));
-      } catch {}
-      sessionStorage.removeItem('est_image');
-    } else if (storedDraft) {
-      // Restore gambar dari draft jika ada
+    }
+
+    // Prioritas 2: draft yang tersimpan sebelumnya
+    if (storedDraft) {
       try {
         const draft = JSON.parse(storedDraft);
         if (draft.images) {
           const imgs = JSON.parse(draft.images);
-          if (imgs?.length) setRefImages(imgs);
+          if (Array.isArray(imgs) && imgs.length > 0) setRefImages(imgs);
         }
-        if (draft.clientName) setClientName(draft.clientName);
+        if (draft.clientName)  setClientName(draft.clientName);
         if (draft.projectName) setProjectName(draft.projectName);
-        if (draft.notes) setNotes(draft.notes);
+        if (draft.notes)       setNotes(draft.notes);
       } catch {}
     }
   }, []);
