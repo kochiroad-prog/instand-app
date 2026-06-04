@@ -5,6 +5,7 @@ import { createQuotation, saveQuotationImages } from '@/lib/supabase';
 import { generateQuotationPDF } from '@/lib/pdf';
 
 const formatRp = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID');
+const FORM_DRAFT_KEY = 'quotation_new_draft'; // persist form state selama sesi
 
 export default function NewQuotationPage() {
   const router = useRouter();
@@ -20,22 +21,57 @@ export default function NewQuotationPage() {
   const fileInputRef                  = useRef(null);
 
   useEffect(() => {
+    // ── Load data dari sessionStorage ──────────────────────
     const storedItems   = sessionStorage.getItem('calc_items');
     const storedHPP     = sessionStorage.getItem('calc_hpp');
     const storedSelling = sessionStorage.getItem('calc_selling');
     const storedImages  = sessionStorage.getItem('est_image');
+    const storedDraft   = sessionStorage.getItem(FORM_DRAFT_KEY);
+
     if (storedItems)   setItems(JSON.parse(storedItems));
     if (storedHPP)     setTotalHPP(parseFloat(storedHPP));
     if (storedSelling) setSellingPrice(parseFloat(storedSelling));
-    // Gambar dari AI Estimator — load otomatis sebagai referensi desain
+
+    // Gambar dari AI Estimator (prioritas) atau dari draft sebelumnya
     if (storedImages) {
       try {
         const imgs = JSON.parse(storedImages);
         if (imgs?.length) setRefImages(imgs);
       } catch {}
+      // Jangan hapus est_image dulu — simpan ke draft
+      try {
+        const draft = storedDraft ? JSON.parse(storedDraft) : {};
+        sessionStorage.setItem(FORM_DRAFT_KEY, JSON.stringify({ ...draft, images: storedImages }));
+      } catch {}
       sessionStorage.removeItem('est_image');
+    } else if (storedDraft) {
+      // Restore gambar dari draft jika ada
+      try {
+        const draft = JSON.parse(storedDraft);
+        if (draft.images) {
+          const imgs = JSON.parse(draft.images);
+          if (imgs?.length) setRefImages(imgs);
+        }
+        if (draft.clientName) setClientName(draft.clientName);
+        if (draft.projectName) setProjectName(draft.projectName);
+        if (draft.notes) setNotes(draft.notes);
+      } catch {}
     }
   }, []);
+
+  // ── Simpan draft ke sessionStorage saat field berubah ────
+  useEffect(() => {
+    if (!clientName && !projectName && !notes && refImages.length === 0) return;
+    try {
+      const existing = sessionStorage.getItem(FORM_DRAFT_KEY);
+      const draft = existing ? JSON.parse(existing) : {};
+      sessionStorage.setItem(FORM_DRAFT_KEY, JSON.stringify({
+        ...draft,
+        clientName, projectName, notes,
+        images: refImages.length > 0 ? JSON.stringify(refImages) : draft.images,
+      }));
+    } catch {}
+  }, [clientName, projectName, notes, refImages]);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2500); };
 
@@ -79,6 +115,8 @@ export default function NewQuotationPage() {
       sessionStorage.removeItem('calc_items');
       sessionStorage.removeItem('calc_hpp');
       sessionStorage.removeItem('calc_selling');
+      sessionStorage.removeItem(FORM_DRAFT_KEY);
+      sessionStorage.removeItem('est_img_session');
       showToast('✅ Rincian tersimpan!');
       setTimeout(() => router.push('/quotations'), 1000);
     } catch (e) {

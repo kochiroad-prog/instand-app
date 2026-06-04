@@ -214,14 +214,29 @@ export default function QuotationsPage() {
     }));
   };
 
-  // Load gambar dari Supabase saat card dibuka pertama kali
+  // Load gambar dari Supabase saat card dibuka — cache di sessionStorage
   const loadQImages = async (qId) => {
-    if (qImages[qId] !== undefined) return; // sudah pernah dimuat
+    if (qImages[qId] !== undefined) return; // sudah dimuat di sesi ini
+
+    // Cek cache sessionStorage dulu
+    try {
+      const cached = sessionStorage.getItem('qimg_' + qId);
+      if (cached) {
+        setQImages(prev => ({ ...prev, [qId]: JSON.parse(cached) }));
+        return;
+      }
+    } catch {}
+
+    // Load dari Supabase
     const imgs = await getQuotationImages(qId);
-    setQImages(prev => ({
-      ...prev,
-      [qId]: imgs.map(i => ({ name: i.file_name || '', data: i.image_data, id: i.id })),
-    }));
+    const mapped = imgs.map(i => ({ name: i.file_name || '', data: i.image_data, id: i.id }));
+    setQImages(prev => ({ ...prev, [qId]: mapped }));
+
+    // Cache di sessionStorage (skip jika terlalu besar)
+    try {
+      const str = JSON.stringify(mapped);
+      if (str.length < 500_000) sessionStorage.setItem('qimg_' + qId, str);
+    } catch {}
   };
 
   const handleImageUpload = (qId, e) => {

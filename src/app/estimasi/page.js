@@ -6,6 +6,7 @@ import { getProducts } from '@/lib/supabase';
 const rp = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID');
 const MARGIN_DEFAULT = 35;
 const SAVED_KEY      = 'est_saved';
+const IMG_SESSION_KEY = 'est_img_session';   // gambar aktif di sesi ini
 const USD_RATE       = 16500; // IDR per USD (approximate)
 
 // Claude 3 Haiku pricing di OpenRouter (per 1M tokens)
@@ -81,11 +82,22 @@ export default function EstimasiPage() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
 
-  // Load saved estimations dari localStorage
+  // ── Restore state dari session saat mount ─────────────────
   useEffect(() => {
+    // 1. Saved estimations dari localStorage
     try {
       const raw = localStorage.getItem(SAVED_KEY);
       if (raw) setSavedList(JSON.parse(raw));
+    } catch {}
+
+    // 2. Restore gambar aktif dari sessionStorage (tidak hilang saat navigasi)
+    try {
+      const sessionImg = sessionStorage.getItem(IMG_SESSION_KEY);
+      if (sessionImg) {
+        const parsed = JSON.parse(sessionImg);
+        setImgPreview(parsed.preview);
+        setImgBase64(parsed.base64);
+      }
     } catch {}
   }, []);
 
@@ -95,14 +107,32 @@ export default function EstimasiPage() {
   const estOutputTok = 600;
   const estCost      = imgBase64 ? estCostIDR(estInputTok, estOutputTok) : 0;
 
+  // ── Simpan gambar ke sessionStorage ──────────────────────
+  const persistImage = (base64) => {
+    try {
+      // Kompres dulu sebelum simpan di session (hemat memory)
+      compressImage(base64, 800).then(compressed => {
+        if (compressed) {
+          sessionStorage.setItem(IMG_SESSION_KEY, JSON.stringify({ preview: compressed, base64: compressed }));
+        }
+      });
+    } catch {}
+  };
+
+  const clearPersistedImage = () => {
+    try { sessionStorage.removeItem(IMG_SESSION_KEY); } catch {}
+  };
+
   // ── Handle upload ─────────────────────────────────────────
   const handleFile = (file) => {
     if (!file || !file.type.startsWith('image/')) return;
     const reader = new FileReader();
     reader.onload = (e) => {
-      setImgPreview(e.target.result);
-      setImgBase64(e.target.result);
+      const b64 = e.target.result;
+      setImgPreview(b64);
+      setImgBase64(b64);
       setResult(null); setItems([]); setError(''); setErrType(''); setActualCost(null);
+      persistImage(b64);  // simpan ke session agar tidak hilang saat navigasi
     };
     reader.readAsDataURL(file);
   };
@@ -341,7 +371,7 @@ export default function EstimasiPage() {
             <div style={{ position:'relative' }}>
               <img src={imgPreview} alt="booth"
                 style={{ width:'100%', display:'block', maxHeight:260, objectFit:'contain', background:'#f8fdf9' }} />
-              <button onClick={e => { e.stopPropagation(); setImgPreview(null); setImgBase64(null); setResult(null); setItems([]); setError(''); setActualCost(null); }}
+              <button onClick={e => { e.stopPropagation(); setImgPreview(null); setImgBase64(null); setResult(null); setItems([]); setError(''); setActualCost(null); clearPersistedImage(); }}
                 style={{ position:'absolute', top:8, right:8, background:'rgba(0,0,0,0.55)', color:'white', border:'none', borderRadius:'50%', width:28, height:28, fontSize:'0.85rem', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
                 ✕
               </button>
