@@ -10,7 +10,7 @@ const CAT_LABEL = {
 
 export async function POST(request) {
   try {
-    const { imageBase64, products } = await request.json();
+    const { imageBase64, products, description } = await request.json();
 
     if (!imageBase64) {
       return NextResponse.json({ error: 'Gambar tidak ditemukan' }, { status: 400 });
@@ -80,7 +80,9 @@ BALAS HANYA DALAM FORMAT JSON INI (tanpa teks lain di luar JSON):
               },
               {
                 type: 'text',
-                text: systemPrompt,
+                text: systemPrompt + (description?.trim()
+                  ? '\n\nINFO TAMBAHAN DARI SALES:\n' + description.trim()
+                  : ''),
               },
             ],
           },
@@ -93,14 +95,26 @@ BALAS HANYA DALAM FORMAT JSON INI (tanpa teks lain di luar JSON):
     if (!orRes.ok) {
       const errText = await orRes.text();
       console.error('[estimate-booth] OpenRouter error:', errText);
+      // Deteksi kredit habis (402) atau billing error
+      let errType = 'api_error';
+      try {
+        const errJson = JSON.parse(errText);
+        if (orRes.status === 402 || errJson?.error?.code === 402 ||
+            errText.includes('credit') || errText.includes('billing') ||
+            errText.includes('insufficient') || errText.includes('balance')) {
+          errType = 'insufficient_credits';
+        }
+      } catch {}
       return NextResponse.json(
-        { error: 'OpenRouter API error: ' + orRes.status, detail: errText },
+        { error: 'OpenRouter API error: ' + orRes.status, detail: errText, errType },
         { status: 500 }
       );
     }
 
     const orData   = await orRes.json();
     const content  = orData.choices?.[0]?.message?.content || '';
+    // Ambil usage data untuk kalkulasi biaya aktual
+    const usage    = orData.usage || {};
 
     // ── Parse JSON dari respons ──────────────────────────────
     const jsonMatch = content.match(/\{[\s\S]*\}/);
@@ -132,7 +146,7 @@ BALAS HANYA DALAM FORMAT JSON INI (tanpa teks lain di luar JSON):
       });
     }
 
-    return NextResponse.json(result);
+    return NextResponse.json({ ...result, usage });
   } catch (err) {
     console.error('[estimate-booth] Error:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
