@@ -82,7 +82,7 @@ export default function EstimasiPage() {
       clearInterval(stepTimer);
 
       if (!res.ok || data.error) {
-        setError(data.error || 'Gagal menganalisa gambar');
+        setError((data.error || 'Gagal menganalisa gambar') + (data.detail ? ' — ' + data.detail.slice(0, 200) : ''));
         return;
       }
 
