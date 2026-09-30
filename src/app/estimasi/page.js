@@ -172,7 +172,14 @@ export default function EstimasiPage() {
       clearInterval(stepTimer);
 
       if (!res.ok || data.error) {
-        setError(data.error || 'Gagal menganalisa');
+        // Pesan yang bisa dibaca orang; kode mentah hanya untuk yang tidak dikenali.
+        const pesan =
+          data.errType === 'model_unavailable'
+            ? `Model AI "${data.model || '-'}" sudah tidak dilayani OpenRouter. Ganti AI_VISION_MODEL di environment.`
+            : data.errType === 'rate_limited'
+              ? 'Terlalu banyak permintaan ke AI. Coba lagi sebentar.'
+              : data.error || 'Gagal menganalisa';
+        setError(pesan);
         setErrType(data.errType || '');
         return;
       }

@@ -7,6 +7,12 @@ const getSupabase = () => createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
+// ── Model AI ─────────────────────────────────────────────────
+// Satu sumber kebenaran; bisa diganti lewat env tanpa menyentuh kode
+// kalau model ini nanti dipensiunkan juga.
+const MODEL_VISI =
+  process.env.AI_VISION_MODEL || process.env.AI_MODEL || 'anthropic/claude-haiku-4.5';
+
 // ── Kategori label untuk konteks AI ──────────────────────────
 const CAT_LABEL = {
   booth_base: 'Booth Dasar',
@@ -105,7 +111,13 @@ BALAS HANYA FORMAT JSON INI (tanpa teks lain):
         'X-Title': 'INSTAND AI Estimator',
       },
       body: JSON.stringify({
-        model: 'anthropic/claude-3-haiku',
+        // PENTING: jangan hardcode model yang bisa dipensiunkan.
+        // 'anthropic/claude-3-haiku' dipensiunkan 10 Sep 2026; katalog OpenRouter
+        // masih menyebutnya tetapi endpoints-nya kosong, sehingga OpenRouter
+        // menjawab 404 -- itulah sumber 404 di AI Estimator.
+        // claude-haiku-4.5 adalah pengganti yang ditunjuk OpenRouter sendiri,
+        // masih menerima gambar (input_modalities: text, image, file).
+        model: MODEL_VISI,
         messages: [
           {
             role: 'user',
@@ -141,9 +153,19 @@ BALAS HANYA FORMAT JSON INI (tanpa teks lain):
           errType = 'insufficient_credits';
         }
       } catch {}
+      // 404 dari OpenRouter berarti id model tidak punya endpoint aktif,
+      // bukan endpoint kita yang hilang. Dulu ini dilaporkan sebagai 500
+      // sehingga penyebabnya sempat salah dibaca.
+      if (orRes.status === 404) errType = 'model_unavailable';
+      if (orRes.status === 429) errType = 'rate_limited';
       return NextResponse.json(
-        { error: 'OpenRouter API error: ' + orRes.status, detail: errText, errType },
-        { status: 500 }
+        {
+          error: 'OpenRouter API error: ' + orRes.status,
+          model: MODEL_VISI,
+          detail: errText,
+          errType,
+        },
+        { status: orRes.status === 402 ? 402 : orRes.status === 429 ? 429 : 502 }
       );
     }
 
